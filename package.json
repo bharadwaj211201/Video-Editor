@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@ffmpeg/core": "*",
+    "@ffmpeg/core": "^0.12.10",
     "@ffmpeg/ffmpeg": "0.10.1",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",

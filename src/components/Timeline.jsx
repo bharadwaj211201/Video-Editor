@@ -17,7 +17,8 @@ export default function Timeline() {
     isProcessing,
     trimError,
     ffmpegStatus,
-    initializeFFmpeg
+    initializeFFmpeg,
+    isPlaying
   } = useEditorStore();
   
   const timelineRef = useRef(null);
@@ -27,6 +28,7 @@ export default function Timeline() {
   const isDragging = useRef(false);
   const dragTarget = useRef(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  const animationFrameRef = useRef(null);
 
   // Initialize FFmpeg when video loads
   useEffect(() => {
@@ -42,6 +44,8 @@ export default function Timeline() {
   };
 
   const handleMouseDown = (e, target) => {
+    e.preventDefault();
+    e.stopPropagation();
     isDragging.current = true;
     dragTarget.current = target;
     document.addEventListener('mousemove', handleMouseMove);
@@ -55,16 +59,21 @@ export default function Timeline() {
     const rect = timelineRef.current.getBoundingClientRect();
     const position = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
     const newTime = (position / rect.width) * videoDuration;
+    const roundedTime = Math.round(newTime * 100) / 100;
 
     switch (dragTarget.current) {
       case 'scrubber':
-        setCurrentTime(newTime);
+        setCurrentTime(roundedTime);
         break;
       case 'trimStart':
-        setTrimPoints(newTime, trimEnd);
+        if (roundedTime < trimEnd - 0.1) {
+          setTrimPoints(roundedTime, trimEnd);
+        }
         break;
       case 'trimEnd':
-        setTrimPoints(trimStart, newTime);
+        if (roundedTime > trimStart + 0.1) {
+          setTrimPoints(trimStart, roundedTime);
+        }
         break;
     }
   };
@@ -101,6 +110,34 @@ export default function Timeline() {
     }
   };
 
+  useEffect(() => {
+    if (!timelineRef.current || !videoDuration) return;
+
+    const updateScrubberPosition = () => {
+      if (scrubberRef.current) {
+        const percentage = (currentTime / videoDuration) * 100;
+        scrubberRef.current.style.left = `${percentage}%`;
+      }
+      animationFrameRef.current = requestAnimationFrame(updateScrubberPosition);
+    };
+
+    if (isPlaying && !isDragging.current) {
+      animationFrameRef.current = requestAnimationFrame(updateScrubberPosition);
+    } else {
+      // Update immediately when not playing
+      const percentage = (currentTime / videoDuration) * 100;
+      if (scrubberRef.current) {
+        scrubberRef.current.style.left = `${percentage}%`;
+      }
+    }
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [currentTime, videoDuration, isPlaying]);
+
   // Update timeline elements position
   useEffect(() => {
     if (!timelineRef.current || !videoDuration) return;
@@ -111,10 +148,9 @@ export default function Timeline() {
       }
     };
 
-    updatePosition(scrubberRef, currentTime);
     updatePosition(trimStartRef, trimStart);
     updatePosition(trimEndRef, trimEnd);
-  }, [currentTime, trimStart, trimEnd, videoDuration]);
+  }, [trimStart, trimEnd, videoDuration]);
 
   return (
     <div className="h-24 bg-gray-800 border-t border-gray-700 p-2 flex flex-col">
@@ -155,19 +191,19 @@ export default function Timeline() {
           {/* Trim handles */}
           <div
             ref={trimStartRef}
-            className="absolute w-3 h-6 bg-blue-500 rounded-sm -top-2 -ml-1.5 cursor-ew-resize"
+            className="trim-handle absolute w-3 h-6 bg-blue-500 rounded-sm -top-2 -ml-1.5 cursor-ew-resize"
             onMouseDown={(e) => handleMouseDown(e, 'trimStart')}
           />
           <div
             ref={trimEndRef}
-            className="absolute w-3 h-6 bg-blue-500 rounded-sm -top-2 -ml-1.5 cursor-ew-resize"
+            className="trim-handle absolute w-3 h-6 bg-blue-500 rounded-sm -top-2 -ml-1.5 cursor-ew-resize"
             onMouseDown={(e) => handleMouseDown(e, 'trimEnd')}
           />
           
           {/* Scrubber */}
           <div
             ref={scrubberRef}
-            className="absolute w-2 h-6 bg-white rounded-sm -top-2 -ml-1 pointer-events-none"
+            className="absolute w-2 h-6 bg-white rounded-sm -top-2 -ml-1 pointer-events-none transition-all duration-75"
           />
         </div>
         
